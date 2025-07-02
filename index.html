@@ -343,7 +343,8 @@
             
             // Auto-start if configured
             if (config.AUTO_START) {
-                appStartStreaming(IS_LOCAL);
+                // appStartStreaming(IS_LOCAL);
+                appStartStreaming(false); // for netlify deployment
 
                 if (checkIfMobile()) {
                     try {

@@ -85,20 +85,42 @@ async function appStartStreaming(isLocal) {
         // Generate the signal request for a new WebRTC connection
         const signalRequest = await window.myGameLiftStreams.generateSignalRequest();
 
-        // Get the streamGroupId based on isLocal flag
-        const streamGroupId = isLocal ? document.getElementById('setupStreamGroupId').value : null;
-        const setupApplicationIdValue = document.getElementById('setupApplicationId').value;
-        const locations = document.getElementById('setupLocations').value;
-
-        const token = await doPost('/api/CreateStreamSession', {
-            StreamGroupId: streamGroupId,  // This will be null when isLocal is false
-            ApplicationIdentifier: setupApplicationIdValue === '' ? null : setupApplicationIdValue,
+        // Prepare request data based on deployment mode
+        const requestData = {
             UserId: document.getElementById('setupUserId').value,
+            SignalRequest: signalRequest,
             AdditionalLaunchArgs: JSON.parse(document.getElementById('setupArgs').value || '[]'),
             AdditionalEnvironmentVariables: JSON.parse(document.getElementById('setupEnv').value || '{}'),
-            SignalRequest: signalRequest,
-            locations: safeJSONParse(locations),
+            Locations: safeJSONParse(document.getElementById('setupLocations').value, ['us-west-2']),
+        };
+
+        // Handle StreamGroupId and ApplicationIdentifier based on mode
+        if (isLocal) {
+            // Local development - use form values
+            const streamGroupId = document.getElementById('setupStreamGroupId').value;
+            const applicationId = document.getElementById('setupApplicationId').value;
+            
+            if (!streamGroupId) {
+                throw new Error('Stream Group ID is required for local development');
+            }
+            if (!applicationId) {
+                throw new Error('Application ID is required for local development');
+            }
+            
+            requestData.StreamGroupId = streamGroupId;
+            requestData.ApplicationIdentifier = applicationId;
+        } else {
+            // Production/Lambda mode - backend will use environment variables
+            // Don't send these fields, let the backend use its environment variables
+            console.log('Production mode: Using backend environment variables for StreamGroupId and ApplicationIdentifier');
+        }
+
+        console.log('Starting stream session with data:', {
+            ...requestData,
+            SignalRequest: '[WebRTC Signal Data]' // Don't log the actual signal data
         });
+
+        const token = await doPost('/api/CreateStreamSession', requestData);
         
         // Store the application description and client CPU cores from the response
         window.applicationDescription = token.ApplicationDescription;
@@ -108,7 +130,7 @@ async function appStartStreaming(isLocal) {
         const getSignalResponseDelayMilliSec = 1000;
         let signalResponse = '';
         while (!signalResponse.length) {
-            console.log('Waiting...');
+            console.log('Waiting for signal response...');
             await new Promise((resolve) => { setTimeout(resolve, getSignalResponseDelayMilliSec); });
             signalResponse = (await doPost('/api/GetSignalResponse', token)).SignalResponse;
         }
@@ -118,34 +140,33 @@ async function appStartStreaming(isLocal) {
 
         LoadingScreenStop();
         
-        // store session data without exposing in URL
-        sessionStorage.setItem('gameSessionData', JSON.stringify({
+        // Store session data without exposing in URL
+        const sessionData = {
             token: token.Token,
             userId: document.getElementById('setupUserId').value,
-            streamGroupId: streamGroupId,
-            applicationId: setupApplicationIdValue,
-            location: JSON.parse(locations)[0],
+            streamGroupId: isLocal ? document.getElementById('setupStreamGroupId').value : 'from-environment',
+            applicationId: isLocal ? document.getElementById('setupApplicationId').value : 'from-environment',
+            location: safeJSONParse(document.getElementById('setupLocations').value, ['us-west-2'])[0],
             timestamp: Date.now()
-        }));
+        };
         
-        // minimal query params
+        sessionStorage.setItem('gameSessionData', JSON.stringify(sessionData));
+        
+        // Minimal query params
         setQueryParams(new Map([
             ['session', 'active']
         ]));
 
         appShowReconnectLinks(true);
-
         appShowPanel('appStreaming');
 
-        // Check if mobile After the stream has started successfully
+        // Handle mobile layout
+        const container = document.getElementById('streamFullscreenContainer');
         if (checkIfMobile()) {
-            // Attempt to go fullscreen and toggle input
-            const container = document.getElementById('streamFullscreenContainer');
             container.classList.remove('streamFullscreenContainerDesktop');
             container.classList.add('streamFullscreenContainerMobile');
             appGoFullscreen();
         } else {
-            const container = document.getElementById('streamFullscreenContainer');
             container.classList.remove('streamFullscreenContainerMobile');
             container.classList.add('streamFullscreenContainerDesktop');
         }
@@ -153,7 +174,18 @@ async function appStartStreaming(isLocal) {
     } catch (e) {
         LoadingScreenStop();
         console.error('Failed to start streaming:', e);
-        window.myGameLiftStreams.close();
+        
+        // Show more detailed error information
+        if (e.message) {
+            console.error('Error message:', e.message);
+        }
+        if (e.stack) {
+            console.error('Error stack:', e.stack);
+        }
+        
+        if (window.myGameLiftStreams) {
+            window.myGameLiftStreams.close();
+        }
         appShowPanel('appError');
     } finally {
         // Clean up the temporary looping audio element, if we created one.
