@@ -1,3 +1,15 @@
-/plays/piggy-road    /index.html   200
-/plays/piggy-road/*  /index.html   200
-/*                   /index.html   200
+# Serve static files directly (IMPORTANT: This must come first)
+/*.js    /*.js    200
+/*.css   /*.css   200  
+/*.png   /*.png   200
+/*.jpg   /*.jpg   200
+/*.ico   /*.ico   200
+/*.mp3   /*.mp3   200
+/*.svg   /*.svg   200
+
+# Game routes
+/plays/piggy-road         /index.html   200
+/plays/piggy-road/*       /index.html   200
+
+# All other routes go to index.html (SPA fallback)
+/*                        /index.html   200

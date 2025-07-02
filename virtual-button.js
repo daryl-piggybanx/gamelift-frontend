@@ -630,7 +630,7 @@ class StreamControlButton extends VirtualButton {
      */
     getSVGString(buttonType) {
         const svg = this.getStreamControlSVG(buttonType);
-        console.log(`SVG content for ${buttonType}:`, svg); // Debug line
+        // console.log(`SVG content for ${buttonType}:`, svg); // Debug line
         return svg;
     }    
 
