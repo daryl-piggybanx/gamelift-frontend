@@ -367,7 +367,7 @@ function streamApplicationMessageCallback(message) {
 /**
  * Terminates the application stream and handles cleanup
  */
-function appTerminateStream() {
+async function appTerminateStream() {
      // Check if mobile After the stream has started successfully
      if (checkIfMobile()) {
         // Attempt to go fullscreen and toggle input
@@ -377,7 +377,37 @@ function appTerminateStream() {
             appToggleInput();
         }
     }
+    
+    // Get the session token and end the stream session
+    const sessionData = JSON.parse(sessionStorage.getItem('gameSessionData') || '{}');
+    const connectionToken = sessionData.token;
+    
+    if (connectionToken) {
+        await endStreamSession(connectionToken);
+    }
+    
     appDisconnect();
+}
+
+/**
+ * Synchronous wrapper for appTerminateStream to handle async execution from onclick
+ * Prevents multiple simultaneous calls and handles errors properly
+ */
+function handleTerminateStream() {
+    // Disable the button to prevent multiple clicks
+    const button = document.getElementById('streamingTerminate');
+    if (button) {
+        button.disabled = true;
+    }
+    
+    // Call the async function and handle the promise
+    appTerminateStream().catch(error => {
+        console.error('Error terminating stream:', error);
+        // Re-enable the button if there's an error
+        if (button) {
+            button.disabled = false;
+        }
+    });
 }
 
 /**
